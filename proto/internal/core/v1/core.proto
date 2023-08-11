@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package core.v1;
+
+enum DataProductType {
+    UNDEFINED = 0;
+    KEY_VALUE = 1;
+    OBJECT = 2;
+    STREAM = 3;
+}
+
+message DataProduct {
+    string name = 1;
+    string domain = 2;
+    DataProductType type = 3;
+
+    // If DataProductType is set to SOURCE, the type of source_data_products
+    // must match the type of this DataProduct. Application logic should enforce this.
+    // Object do not have 'source'
+    repeated DataProduct source_data_products = 4; 
+}

@@ -1,0 +1,52 @@
+syntax = "proto3";
+package api.v1;
+import "core/v1/core.proto";
+
+// CRUDL requests and responses
+
+// Create
+message CreateDataProductRequest {
+    core.v1.DataProduct product = 1;
+}
+
+message CreateDataProductResponse {
+    string status = 1; // you can use more complex status, e.g. detailed error message, error code, etc.
+}
+
+// Read
+message ReadDataProductRequest {
+    string name = 1; // Assuming name is unique identifier for a DataProduct
+}
+
+message ReadDataProductResponse {
+    core.v1.DataProduct product = 1;
+}
+
+// Update
+message UpdateDataProductRequest {
+    core.v1.DataProduct product = 1;
+}
+
+message UpdateDataProductResponse {
+    string status = 1; // similarly, you can use more complex status
+}
+
+// Delete
+message DeleteDataProductRequest {
+    string name = 1;
+}
+
+message DeleteDataProductResponse {
+    string status = 1;
+}
+
+// List (MVP not support paging)
+message ListDataProductsRequest {
+    int32 page_size = 1;  // Number of products to return per page
+    string page_token = 2;  // Token to specify the starting point for the listing
+}
+
+message ListDataProductsResponse {
+    repeated core.v1.DataProduct products = 1;
+    string next_page_token = 2;  // Token to retrieve the next page of results
+}
