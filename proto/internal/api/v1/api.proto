@@ -2,51 +2,104 @@ syntax = "proto3";
 package api.v1;
 import "core/v1/core.proto";
 
-// CRUDL requests and responses
+message DataProductRequest {
+    oneof request {
+        CreateDataProductRequest create = 1;
+        InfoDataProductRequest info = 2;
+        UpdateDataProductRequest update = 3;
+        DeleteDataProductRequest delete = 4;
+        ListDataProductsRequest list = 5;
+    }
+}
 
-// Create
+message DataProductResponse {
+    oneof response {
+        CreateDataProductResponse create = 1;
+        InfoDataProductResponse info = 2;
+        UpdateDataProductResponse update = 3;
+        DeleteDataProductResponse delete = 4;
+        ListDataProductsResponse list = 5;
+        ErrorResponse error = 6;
+    }
+}
+
 message CreateDataProductRequest {
     core.v1.DataProduct product = 1;
 }
 
 message CreateDataProductResponse {
-    string status = 1; // you can use more complex status, e.g. detailed error message, error code, etc.
+    string status = 1;
 }
 
-// Read
-message ReadDataProductRequest {
-    string name = 1; // Assuming name is unique identifier for a DataProduct
+message InfoDataProductRequest {
+    
 }
 
-message ReadDataProductResponse {
+message InfoDataProductResponse {
     core.v1.DataProduct product = 1;
 }
 
-// Update
 message UpdateDataProductRequest {
     core.v1.DataProduct product = 1;
 }
 
 message UpdateDataProductResponse {
-    string status = 1; // similarly, you can use more complex status
+    string status = 1;
 }
 
-// Delete
 message DeleteDataProductRequest {
-    string name = 1;
 }
 
 message DeleteDataProductResponse {
     string status = 1;
 }
 
-// List (MVP not support paging)
 message ListDataProductsRequest {
-    int32 page_size = 1;  // Number of products to return per page
-    string page_token = 2;  // Token to specify the starting point for the listing
 }
 
 message ListDataProductsResponse {
     repeated core.v1.DataProduct products = 1;
-    string next_page_token = 2;  // Token to retrieve the next page of results
 }
+
+message ErrorResponse {
+    string error_code = 1;
+    string error_message = 2;
+}
+
+// Key-Value
+message KeyValueRequest {
+    oneof operation {
+        ScanOp scan = 1;
+        GetOp get = 2;
+    }
+}
+
+message KeyValueResponse {
+    oneof response {
+        KeyValueDataResponse data_response = 1;
+        ErrorResponse error_response = 2;
+    }
+}
+
+message ScanOp {
+    int32 limit = 1;
+    bool reverse = 2;
+    string start_key = 3;
+    string end_key = 4;
+}
+
+message GetOp {
+    string key = 1;
+}
+
+message KeyValue {
+    string key = 1;
+    string value = 2;
+}
+
+message KeyValueDataResponse {
+    repeated KeyValue kvs = 1;
+}
+
+
+

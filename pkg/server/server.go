@@ -2,16 +2,26 @@ package server
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
-	"strings"
 	"time"
 
-	api "github.com/Awareness-Labs/rainforest/pkg/proto/api/v1"
-	core "github.com/Awareness-Labs/rainforest/pkg/proto/core/v1"
+	apiv1 "github.com/Awareness-Labs/rainforest/pkg/proto/api/v1"
+	corev1 "github.com/Awareness-Labs/rainforest/pkg/proto/core/v1"
+
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
+)
+
+const (
+	StateDataProductSubjectPrefix  = "$RAINFOREST.DP.STATE."
+	EventDataProductSubjectPrefix  = "$RAINFOREST.DP.EVENT."
+	SourceDataProductSubjectPrefix = "$RAINFOREST.DP.SOURCE."
+
+	StateDataProductPrefix  = "STATE_"
+	EventDataProductPrefix  = "EVENT_"
+	SourceDataProductPrefix = "SOURCE_"
 )
 
 type Server struct {
@@ -50,23 +60,24 @@ func NewServer(nc *nats.Conn) *Server {
 }
 
 func (s *Server) Start() {
-	// Subscribe to DataProduct topics
-	_, err := s.conn.Subscribe("$RAINFOREST.API.DP.CREATE", s.CreateDataProduct)
+
+	// API Subscribe to DataProduct topics
+	_, err := s.conn.Subscribe("$RAINFOREST.API.DP.CREATE.*", s.CreateDataProduct)
 	if err != nil {
 		log.Fatalf("Error subscribing to topic: %v", err)
 	}
 
-	_, err = s.conn.Subscribe("$RAINFOREST.API.DP.READ", s.ReadDataProduct)
+	_, err = s.conn.Subscribe("$RAINFOREST.API.DP.INFO.*", s.InfoDataProduct)
 	if err != nil {
 		log.Fatalf("Error subscribing to topic: %v", err)
 	}
 
-	_, err = s.conn.Subscribe("$RAINFOREST.API.DP.UPDATE", s.UpdateDataProduct)
+	_, err = s.conn.Subscribe("$RAINFOREST.API.DP.UPDATE.*", s.UpdateDataProduct)
 	if err != nil {
 		log.Fatalf("Error subscribing to topic: %v", err)
 	}
 
-	_, err = s.conn.Subscribe("$RAINFOREST.API.DP.DELETE", s.DeleteDataProduct)
+	_, err = s.conn.Subscribe("$RAINFOREST.API.DP.DELETE.*", s.DeleteDataProduct)
 	if err != nil {
 		log.Fatalf("Error subscribing to topic: %v", err)
 	}
@@ -81,209 +92,113 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Serialize
-	req := &api.CreateDataProductRequest{}
-	if err := proto.Unmarshal(m.Data, req); err != nil {
-		sendErrorResponse(m, "Error unmarshaling request")
-		return
-	}
+	// Unmarshal
+	req := &apiv1.CreateDataProductRequest{}
 
-	// Validate req (Original Data Product or Secondary Data Product)
-	if req.GetProduct().Type == core.DataProductType_UNDEFINED {
-		sendErrorResponse(m, "Error that not define data product type")
-		return
-	}
+	err := protojson.Unmarshal(m.Data, req)
 
-	// Implement logic to create a DataProduct.
-	switch req.Product.Type {
-	case core.DataProductType_KEY_VALUE:
-		sources := []*nats.StreamSource{}
-		if len(req.Product.GetSourceDataProducts()) != 0 {
-			for _, source := range req.GetProduct().SourceDataProducts {
-				// Must align with parents type, or nats will not process
-				if source.GetType() != req.Product.Type {
-					sendErrorResponse(m, "Error that not align with parent type")
-					return
-				}
-				sources = append(sources, &nats.StreamSource{
-					Name:   source.GetName(),
-					Domain: source.GetDomain(),
-				})
-			}
-		}
-		s.kvManager.CreateKeyValue(&nats.KeyValueConfig{
-			Bucket:  req.Product.GetName(),
-			Sources: sources,
-		})
-
-	case core.DataProductType_STREAM:
-		sources := []*jetstream.StreamSource{}
-		if len(req.Product.GetSourceDataProducts()) != 0 {
-			for _, source := range req.GetProduct().SourceDataProducts {
-				// Must align with parents type, or nats will not process
-				if source.GetType() != req.Product.Type {
-					sendErrorResponse(m, "Error that not align with parent type")
-					return
-				}
-				sources = append(sources, &jetstream.StreamSource{
-					Name:   source.GetName(),
-					Domain: source.GetDomain(),
-				})
-			}
-		}
-		s.streamManager.CreateStream(ctx, jetstream.StreamConfig{
-			Name:     req.Product.GetName(),
-			Subjects: []string{"$FOREST.DP." + req.Product.GetName()},
-		})
-
-	case core.DataProductType_OBJECT:
-		// Object do not have "source"
-		s.objManager.CreateObjectStore(&nats.ObjectStoreConfig{
-			Bucket: req.Product.GetName(),
-		})
-
-	case core.DataProductType_UNDEFINED:
-		sendErrorResponse(m, "Error not define data product type")
-		return
-	}
-
-	resp := &api.CreateDataProductResponse{
-		Status: "OK",
-	}
-
-	data, err := proto.Marshal(resp)
 	if err != nil {
-		sendErrorResponse(m, "Error marshaling response")
+		sendErrorResponse(m, err)
 		return
 	}
 
-	responseMsg := &nats.Msg{
-		Subject: m.Reply,
-		Data:    data,
+	// TODO: Validate req
+	// if err != nil {
+	// 	sendErrorResponse(m, err)
+	// 	return
+	// }
+
+	// Implement create a DataProduct.
+	newDp := req.GetProduct()
+	sources := []*jetstream.StreamSource{}
+	for _, dp := range newDp.SourceDataProducts {
+		// Must align with parents type, or nats will not process
+		if newDp.GetType() != dp.GetType() {
+			sendErrorResponse(m, errors.New("source type not align data product type"))
+			return
+		}
+		sources = append(sources, &jetstream.StreamSource{
+			Name:   dp.Name,
+			Domain: dp.Domain,
+		})
 	}
 
-	m.RespondMsg(responseMsg)
+	switch newDp.GetType() {
+	case corev1.DataProductType_DATA_PRODUCT_TYPE_STATE:
+		_, err := s.streamManager.CreateStream(ctx, jetstream.StreamConfig{
+			Name:              StateDataProductPrefix + newDp.GetName(),
+			MaxMsgsPerSubject: 1,
+			Subjects:          []string{StateDataProductSubjectPrefix + newDp.GetName() + ".*"},
+			Description:       newDp.GetDescription(),
+			Discard:           jetstream.DiscardOld,
+			Sources:           sources,
+		})
+		if err != nil {
+			sendErrorResponse(m, err)
+			return
+		}
+		sendResponse(m, "data product created: "+newDp.GetName())
+	case corev1.DataProductType_DATA_PRODUCT_TYPE_EVENT:
+		_, err := s.streamManager.CreateStream(ctx, jetstream.StreamConfig{
+			Name:        EventDataProductPrefix + newDp.GetName(),
+			Subjects:    []string{EventDataProductSubjectPrefix + newDp.GetName() + ".*"},
+			Description: newDp.GetDescription(),
+			Sources:     sources,
+		})
+		if err != nil {
+			sendErrorResponse(m, err)
+			return
+		}
+		sendResponse(m, "data product created: "+newDp.GetName())
+	case corev1.DataProductType_DATA_PRODUCT_TYPE_SOURCE:
+		_, err := s.streamManager.CreateStream(ctx, jetstream.StreamConfig{
+			Name:        SourceDataProductPrefix + newDp.GetName(),
+			Subjects:    []string{SourceDataProductSubjectPrefix + newDp.GetName() + ".*"},
+			Description: newDp.GetDescription(),
+			Sources:     sources,
+		})
+		if err != nil {
+			sendErrorResponse(m, err)
+			return
+		}
+		sendResponse(m, "data product created: "+newDp.GetName())
+	default:
+		sendErrorResponse(m, errors.New("not support this type data product"))
+		return
+	}
+
 }
 
-// TODO:
-func (s *Server) ReadDataProduct(m *nats.Msg) {
-	req := &api.ReadDataProductRequest{}
-	if err := proto.Unmarshal(m.Data, req); err != nil {
-		sendErrorResponse(m, "Error unmarshaling request")
-		return
+func sendErrorResponse(m *nats.Msg, err error) {
+	res := &apiv1.ErrorResponse{
+		ErrorCode:    "400",
+		ErrorMessage: err.Error(),
 	}
 
-	// Implement logic to read a DataProduct by its name.
-	// For this example, returning a dummy DataProduct.
-	resp := &api.ReadDataProductResponse{
-		Product: &core.DataProduct{
-			Name:   req.Name,
-			Domain: "Sample Domain",
-			Type:   core.DataProductType_KEY_VALUE,
-		},
-	}
-	data, err := proto.Marshal(resp)
-	if err != nil {
-		sendErrorResponse(m, "Error marshaling response")
-		return
-	}
-	m.Respond(data)
+	resData, _ := protojson.Marshal(res)
+	m.Respond(resData)
+}
+
+func sendResponse(m *nats.Msg, status string) {
+	// res := &apiv1.DataProductResponse{}
+	// resData, _ := json.Marshal(res)
+	m.Respond([]byte(status))
+}
+
+// Not MVP feature!
+
+// TODO:
+func (s *Server) InfoDataProduct(m *nats.Msg) {
 }
 
 // TODO:
 func (s *Server) UpdateDataProduct(m *nats.Msg) {
-	req := &api.UpdateDataProductRequest{}
-	if err := proto.Unmarshal(m.Data, req); err != nil {
-		sendErrorResponse(m, "Error unmarshaling request")
-		return
-	}
-
-	// Implement logic to update a DataProduct.
-	// For this example, returning an "OK" status.
-	resp := &api.UpdateDataProductResponse{
-		Status: "OK",
-	}
-	data, err := proto.Marshal(resp)
-	if err != nil {
-		sendErrorResponse(m, "Error marshaling response")
-		return
-	}
-	m.Respond(data)
 }
 
 // TODO:
 func (s *Server) DeleteDataProduct(m *nats.Msg) {
-	req := &api.DeleteDataProductRequest{}
-	if err := proto.Unmarshal(m.Data, req); err != nil {
-		sendErrorResponse(m, "Error unmarshaling request")
-		return
-	}
-
-	// Implement logic to delete a DataProduct by its name.
-	// For this example, returning an "OK" status.
-	resp := &api.DeleteDataProductResponse{
-		Status: "OK",
-	}
-	data, err := proto.Marshal(resp)
-	if err != nil {
-		sendErrorResponse(m, "Error marshaling response")
-		return
-	}
-	m.Respond(data)
 }
 
+// TODO
 func (s *Server) ListDataProducts(m *nats.Msg) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	req := &api.ListDataProductsRequest{}
-	if err := proto.Unmarshal(m.Data, req); err != nil {
-		sendErrorResponse(m, "Error unmarshaling request")
-		return
-	}
-
-	// Read Data Product from NATS
-	streams := s.streamManager.StreamNames(ctx)
-	products := []*core.DataProduct{}
-
-	// Stream-based data product
-	for s := range streams.Name() {
-
-		if strings.HasPrefix(s, "KV_") {
-			products = append(products, &core.DataProduct{
-				Name: strings.TrimPrefix(s, "KV_"),
-				Type: core.DataProductType_KEY_VALUE,
-			})
-		} else if strings.HasPrefix(s, "OBJ_") {
-			products = append(products, &core.DataProduct{
-				Name: strings.TrimPrefix(s, "OBJ_"),
-				Type: core.DataProductType_OBJECT,
-			})
-		} else {
-			products = append(products, &core.DataProduct{
-				Name: s,
-				Type: core.DataProductType_STREAM,
-			})
-		}
-	}
-	if streams.Err() != nil {
-		fmt.Println("Unexpected error ocurred")
-	}
-
-	// Process resp
-	resp := &api.ListDataProductsResponse{
-		Products: products,
-	}
-	data, err := proto.Marshal(resp)
-
-	if err != nil {
-		sendErrorResponse(m, "Error marshaling response")
-		return
-	}
-	m.Respond(data)
-}
-
-func sendErrorResponse(m *nats.Msg, errorMsg string) {
-	// Customize error responses based on your application's needs.
-	m.Respond([]byte(errorMsg))
 }

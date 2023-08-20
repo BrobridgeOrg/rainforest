@@ -98,7 +98,8 @@ nats kv ls --server rainforest_user:password@localhost:4111
 ```
 ### Create Secondary (KV)Data Product (From 4112 host)
 ```
-go run cmd/create_source_kv_dp/create_source_kv_dp.go 
+
+
 ```
 
 ```
@@ -154,3 +155,131 @@ nats s ls --server rainforest_user:password@localhost:4112
 
 nats s get --server rainforest_user:password@localhost:4112
 ```
+
+# Art of Stream
+## Event 
+Just like normal event stream nothing special
+## State Stream
+``` bash
+$ nats s add StateStream -s rainforest_user:password@localhost:4111
+? Subjects $RAINFOREST.DataProduct.>
+? Per Subject Messages Limit 1
+```
+
+### Publish 3 Event for entities
+```
+nats publish '$RAINFOREST.DataProduct.0' Recored_0 -s rainforest_user:password@localhost:4111
+nats publish '$RAINFOREST.DataProduct.1' Recored_1 -s rainforest_user:password@localhost:4111
+nats publish '$RAINFOREST.DataProduct.2' Recored_2 -s rainforest_user:password@localhost:4111
+```
+
+### Publish 1 After-Event 
+```
+nats publish '$RAINFOREST.DataProduct.0' Recored_0_new -s rainforest_user:password@localhost:4111
+```
+
+### Subscrible all of them (that will show Recored_0_new!!)
+```
+nats subscribe '$RAINFOREST.DataProduct.0' --start-sequence=1 -s rainforest_user:password@localhost:4111
+```
+
+
+# Build-In Worker
+* Storage: State Stream -> BadgerDB 
+* Fulltext: State Stream -> Bleve
+* Sink: State Stream -> Object (Run DuckDB)
+
+# API
+$RAINFOREST.API.DATAPRODUCT.CREATE.*
+$RAINFOREST.API.DATAPRODUCT.INFO.*
+$RAINFOREST.API.DATAPRODUCT.UPDATE.*
+$RAINFOREST.API.DATAPRODUCT.DELETE.*
+$RAINFOREST.API.DATAPRODUCT.LIST
+
+$RAINFOREST.API.DATAPRODUCT.<data_product>.<pk>
+$RAINFOREST.API.DATAPRODUCT.<data_product>.<event_id>
+
+$RAINFOREST.API.KV.<data_product> 
+$RAINFOREST.API.FULLTEXT.<data_product>
+$RAINFOREST.API.DUCK.<data_product>
+
+
+
+# Presentation
+1. Rainforest Intro
+    * Span States, Events to Unlimited Team
+    * Infra aligned
+2. Demo I: Create State Data Product
+3. Demo I: Create Source State Data Product
+4. Demo I: KV API
+5. Demo I: FULLTEXT API
+5. Demo I: DUCK API
+
+# Create State Data Prodcut (I just build for you)
+```
+nats request '$RAINFOREST.API.DATAPRODUCT.CREATE.*' \
+'{ 
+  "name": "StateDataProductExample", 
+  "domain": "Team A", 
+  "dataproduct_type": "StateDataProduct", 
+  "description": "This is a sample state data product."
+}'
+```
+
+# Write some State data
+```
+nats publish '$RAINFOREST.DP.STATE.StateDataProductExample.0' value_0
+nats publish '$RAINFOREST.DP.STATE.StateDataProductExample.1' value_1
+nats publish '$RAINFOREST.DP.STATE.StateDataProductExample.2' value_2
+```
+# Write some Event data
+```
+nats publish '$RAINFOREST.DP.EVENT.EventDataProductExample.0' click
+nats publish '$RAINFOREST.DP.EVENT.EventDataProductExample.1' roll
+nats publish '$RAINFOREST.DP.EVENT.EventDataProductExample.2' open
+nats publish '$RAINFOREST.DP.EVENT.EventDataProductExample.2' download
+nats publish '$RAINFOREST.DP.EVENT.EventDataProductExample.2' close
+```
+
+# Create Event Data Prodcut
+```
+nats request '$RAINFOREST.API.DATAPRODUCT.CREATE.*' 
+'{ 
+  "name": "EventDataProductExample", 
+  "domain": "Team A", 
+  "dataproduct_type": "EventDataProduct", 
+  "description": "This is a sample event data product."
+}'
+
+nats publish '$RAINFOREST.API.DATAPRODUCT.EventDataProductExample.0' value_0
+nats publish '$RAINFOREST.API.DATAPRODUCT.EventDataProductExample.0' value_1
+nats publish '$RAINFOREST.API.DATAPRODUCT.EventDataProductExample.0' value_2
+```
+
+# Create Source Data Product
+```
+nats request '$RAINFOREST.API.DATAPRODUCT.CREATE.*' \
+'{
+  "name": "SourceStateDataProduct",
+  "domain": "TeamB",
+  "dataproduct_type": "StateDataProduct",
+  "description": "This is a sample source state data product.",
+  "sources": [
+    {
+      "name": "SourceStateDataProduct",
+      "domain": "SourceDomain",
+      "dataproduct_type": "StateDataProduct"
+    }
+  ]
+}'
+
+
+```
+
+
+# Leaf server 
+* leaf port: 4222
+
+# Hub Server
+* port: 4222
+* leaf: 7422
