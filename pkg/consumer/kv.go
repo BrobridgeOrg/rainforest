@@ -27,9 +27,9 @@ type KeyValueConsumer struct {
 	streamManager jetstream.JetStream
 }
 
-func NewKeyValueConsumer(nc *nats.Conn) *KeyValueConsumer {
+func NewKeyValueConsumer(nc *nats.Conn, kvPath string) *KeyValueConsumer {
 
-	db, err := badger.Open(badger.DefaultOptions("./data/badger"))
+	db, err := badger.Open(badger.DefaultOptions(kvPath))
 	if err != nil {
 		log.Fatal(err)
 	}

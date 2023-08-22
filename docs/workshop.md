@@ -10,11 +10,11 @@ goreman start
 
 # Start your own Rainforest Leaf server
 ```
-./rainforest_leaf --port=4111 --domain=tachun --hub-urls=localhost:7422
+go run cmd/rainforest_leaf/rainforest_leaf.go --port=4111 --domain=tachun --hub-urls=localhost:7422 --kv-path=./data/badger/sts-0 --stream-path=./data/stream/sts-0
 ```
 # Create a State Data Product
 ``` bash
-nats request '$RAINFOREST.API.DP.CREATE.*' \
+nats request '$RAINFOREST.API.DP.CREATE.*' --server=localhost:4111 \
 '{
   "product": {
     "name": "OrdersState",
@@ -26,15 +26,15 @@ nats request '$RAINFOREST.API.DP.CREATE.*' \
 ```
 # Publish some State
 ```
-nats publish '$RAINFOREST.DP.STATE.OrdersState.0' value_0
-nats publish '$RAINFOREST.DP.STATE.OrdersState.1' value_1
-nats publish '$RAINFOREST.DP.STATE.OrdersState.2' value_2
-nats publish '$RAINFOREST.DP.STATE.OrdersState.3' value_3
-nats publish '$RAINFOREST.DP.STATE.OrdersState.4' value_4
-nats publish '$RAINFOREST.DP.STATE.OrdersState.5' value_5
-nats publish '$RAINFOREST.DP.STATE.OrdersState.6' value_6
-nats publish '$RAINFOREST.DP.STATE.OrdersState.7' value_7
-nats publish '$RAINFOREST.DP.STATE.OrdersState.8' value_8
+nats publish '$RAINFOREST.DP.STATE.OrdersState.0' value_0 --server=localhost:4111
+nats publish '$RAINFOREST.DP.STATE.OrdersState.1' value_1 --server=localhost:4111
+nats publish '$RAINFOREST.DP.STATE.OrdersState.2' value_2 --server=localhost:4111
+nats publish '$RAINFOREST.DP.STATE.OrdersState.3' value_3 --server=localhost:4111
+nats publish '$RAINFOREST.DP.STATE.OrdersState.4' value_4 --server=localhost:4111
+nats publish '$RAINFOREST.DP.STATE.OrdersState.5' value_5 --server=localhost:4111
+nats publish '$RAINFOREST.DP.STATE.OrdersState.6' value_6 --server=localhost:4111
+nats publish '$RAINFOREST.DP.STATE.OrdersState.7' value_7 --server=localhost:4111
+nats publish '$RAINFOREST.DP.STATE.OrdersState.8' value_8 --server=localhost:4111
 ```
 # Read it!
 ```
@@ -54,12 +54,26 @@ nats request '$RAINFOREST.API.KV.*' \
 
 # Create another Rainforest server
 ```
-./rainforest_leaf --hub-server=URL --user=USER --password=PASSWORD --domain= 
+go run cmd/rainforest_leaf/rainforest_leaf.go --port=4112 --domain=prod --hub-urls=localhost:7422 --kv-path=./data/badger/sts-1 --stream-path=./data/stream/sts-1
 ```
 
 # Create a Data Product. but ... a "Source" Data Product!
 ```
-
+nats request '$RAINFOREST.API.DP.CREATE.*' --server=localhost:4112 \
+'{
+  "product": {
+    "name": "SecondaryDataProduct",
+    "domain": "tachun",
+    "type": "DATA_PRODUCT_TYPE_SOURCE",
+    "description": "This is a Source Data Product",
+    "source_data_products": [
+      {
+        "name": "STATE_OrdersState",
+        "domain": "tachun"
+      }
+    ]
+  }
+}'
 ```
 # I Stop my Data Product
 

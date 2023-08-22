@@ -110,18 +110,6 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 
 	// Implement create a DataProduct.
 	newDp := req.GetProduct()
-	sources := []*jetstream.StreamSource{}
-	for _, dp := range newDp.SourceDataProducts {
-		// Must align with parents type, or nats will not process
-		if newDp.GetType() != dp.GetType() {
-			sendErrorResponse(m, errors.New("source type not align data product type"))
-			return
-		}
-		sources = append(sources, &jetstream.StreamSource{
-			Name:   dp.Name,
-			Domain: dp.Domain,
-		})
-	}
 
 	switch newDp.GetType() {
 	case corev1.DataProductType_DATA_PRODUCT_TYPE_STATE:
@@ -131,7 +119,6 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 			Subjects:          []string{StateDataProductSubjectPrefix + newDp.GetName() + ".*"},
 			Description:       newDp.GetDescription(),
 			Discard:           jetstream.DiscardOld,
-			Sources:           sources,
 		})
 		if err != nil {
 			sendErrorResponse(m, err)
@@ -143,7 +130,6 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 			Name:        EventDataProductPrefix + newDp.GetName(),
 			Subjects:    []string{EventDataProductSubjectPrefix + newDp.GetName() + ".*"},
 			Description: newDp.GetDescription(),
-			Sources:     sources,
 		})
 		if err != nil {
 			sendErrorResponse(m, err)
@@ -151,6 +137,17 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 		}
 		sendResponse(m, "data product created: "+newDp.GetName())
 	case corev1.DataProductType_DATA_PRODUCT_TYPE_SOURCE:
+
+		sources := []*jetstream.StreamSource{}
+		for _, dp := range newDp.SourceDataProducts {
+			// Must align with parents type, or nats will not process
+			sources = append(sources, &jetstream.StreamSource{
+				Name:   dp.Name,
+				Domain: dp.Domain,
+			})
+			log.Println("SOURCE:", dp.Name, dp.Domain)
+		}
+
 		_, err := s.streamManager.CreateStream(ctx, jetstream.StreamConfig{
 			Name:        SourceDataProductPrefix + newDp.GetName(),
 			Subjects:    []string{SourceDataProductSubjectPrefix + newDp.GetName() + ".*"},

@@ -15,17 +15,16 @@ import (
 
 func init() {
 
-	pflag.Int("port", 4222, "port to serve on")
+	pflag.String("port", "4222", "port to serve on")
 	pflag.String("domain", "", "domain of the rainforest server (required)")
 	pflag.StringArray("hub-urls", []string{}, "remote connection hub URLs")
 	pflag.Int("leaf-port", 7422, "leaf port to start")
-	pflag.String("store-dir", "./data/stream", "directory to store data")
+	pflag.String("stream-path", "./data/stream", "directory to store stream data")
+	pflag.String("kv-path", "", "directory to store key value data")
 
 	pflag.Parse()
 
 	viper.BindPFlags(pflag.CommandLine)
-	viper.SetDefault("port", 4222)
-
 }
 
 func main() {
@@ -45,7 +44,7 @@ func main() {
 	strServer.Start()
 
 	// Connect to NATS
-	nc, err := nats.Connect(nats.DefaultURL)
+	nc, err := nats.Connect("localhost:" + cfg.Port)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func main() {
 	rfServer.Start()
 
 	// Start KV consumer
-	kv := consumer.NewKeyValueConsumer(nc)
+	kv := consumer.NewKeyValueConsumer(nc, cfg.KVPath)
 	go kv.Start()
 
 	// Wait to stop

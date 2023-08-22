@@ -3,6 +3,7 @@ package stream
 import (
 	"log"
 	"net/url"
+	"strconv"
 
 	"github.com/nats-io/nats-server/v2/server"
 )
@@ -12,11 +13,12 @@ type StreamServer struct {
 }
 
 type StreamServerConfig struct {
-	Port     int      `mapstructure:"port"`
-	Domain   string   `mapstructure:"domain"`
-	HubURLs  []string `mapstructure:"hub-urls"`
-	LeafPort int      `mapstructure:"leaf-port"`
-	StoreDir string   `mapstructure:"store-dir"`
+	Port       string   `mapstructure:"port"`
+	Domain     string   `mapstructure:"domain"`
+	HubURLs    []string `mapstructure:"hub-urls"`
+	LeafPort   int      `mapstructure:"leaf-port"`
+	StreamPath string   `mapstructure:"stream-path"`
+	KVPath     string   `mapstructure:"kv-path"`
 }
 
 func NewStreamServer(cfg StreamServerConfig) *StreamServer {
@@ -26,17 +28,21 @@ func NewStreamServer(cfg StreamServerConfig) *StreamServer {
 			Host: hub,
 		})
 	}
-
+	port, _ := strconv.Atoi(cfg.Port)
 	s, err := server.NewServer(&server.Options{
-		Port: cfg.Port,
+		Port:            port,
 		JetStream:       true,
 		JetStreamDomain: cfg.Domain,
-		StoreDir:        cfg.StoreDir,
+		StoreDir:        cfg.StreamPath,
 		LeafNode: server.LeafNodeOpts{
 			Host: "0.0.0.0",
 			// Port: cfg.LeafPort, not use in lead server
+			Remotes: []*server.RemoteLeafOpts{
+				{
+					URLs: routes,
+				},
+			},
 		},
-		Routes: routes,
 	})
 
 	if err != nil {
