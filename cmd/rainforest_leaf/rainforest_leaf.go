@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Awareness-Labs/rainforest/pkg/consumer"
+	"github.com/Awareness-Labs/rainforest/pkg/proto/consumer"
 	"github.com/Awareness-Labs/rainforest/pkg/server"
 	"github.com/Awareness-Labs/rainforest/pkg/stream"
 	"github.com/nats-io/nats.go"
