@@ -6,7 +6,6 @@ enum DataProductType {
     DATA_PRODUCT_TYPE_STATE = 1;
     DATA_PRODUCT_TYPE_EVENT = 2;
     DATA_PRODUCT_TYPE_OBJECT = 3;
-    DATA_PRODUCT_TYPE_SOURCE = 4;
 }
 
 message DataProduct {

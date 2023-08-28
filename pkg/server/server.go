@@ -113,12 +113,15 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 
 	switch newDp.GetType() {
 	case corev1.DataProductType_DATA_PRODUCT_TYPE_STATE:
+		// if this DP has source
+		sources := getSourceDataProduct(newDp)
 		_, err := s.streamManager.CreateStream(ctx, jetstream.StreamConfig{
 			Name:              StateDataProductPrefix + newDp.GetName(),
 			MaxMsgsPerSubject: 1,
 			Subjects:          []string{StateDataProductSubjectPrefix + newDp.GetName() + ".*"},
 			Description:       newDp.GetDescription(),
 			Discard:           jetstream.DiscardOld,
+			Sources:           sources,
 		})
 		if err != nil {
 			sendErrorResponse(m, err)
@@ -126,31 +129,11 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 		}
 		sendResponse(m, "data product created: "+newDp.GetName())
 	case corev1.DataProductType_DATA_PRODUCT_TYPE_EVENT:
+		// if this DP has source
+		sources := getSourceDataProduct(newDp)
 		_, err := s.streamManager.CreateStream(ctx, jetstream.StreamConfig{
 			Name:        EventDataProductPrefix + newDp.GetName(),
 			Subjects:    []string{EventDataProductSubjectPrefix + newDp.GetName() + ".*"},
-			Description: newDp.GetDescription(),
-		})
-		if err != nil {
-			sendErrorResponse(m, err)
-			return
-		}
-		sendResponse(m, "data product created: "+newDp.GetName())
-	case corev1.DataProductType_DATA_PRODUCT_TYPE_SOURCE:
-
-		sources := []*jetstream.StreamSource{}
-		for _, dp := range newDp.SourceDataProducts {
-			// Must align with parents type, or nats will not process
-			sources = append(sources, &jetstream.StreamSource{
-				Name:   dp.Name,
-				Domain: dp.Domain,
-			})
-			log.Println("SOURCE:", dp.Name, dp.Domain)
-		}
-
-		_, err := s.streamManager.CreateStream(ctx, jetstream.StreamConfig{
-			Name:        SourceDataProductPrefix + newDp.GetName(),
-			Subjects:    []string{SourceDataProductSubjectPrefix + newDp.GetName() + ".*"},
 			Description: newDp.GetDescription(),
 			Sources:     sources,
 		})
@@ -159,6 +142,7 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 			return
 		}
 		sendResponse(m, "data product created: "+newDp.GetName())
+
 	default:
 		sendErrorResponse(m, errors.New("not support this type data product"))
 		return
@@ -180,6 +164,19 @@ func sendResponse(m *nats.Msg, status string) {
 	// res := &apiv1.DataProductResponse{}
 	// resData, _ := json.Marshal(res)
 	m.Respond([]byte(status))
+}
+
+func getSourceDataProduct(newDp *corev1.DataProduct) []*jetstream.StreamSource {
+	sources := []*jetstream.StreamSource{}
+	for _, dp := range newDp.SourceDataProducts {
+		// Must align with parents type, or nats will not process
+		sources = append(sources, &jetstream.StreamSource{
+			Name:   dp.Name,
+			Domain: dp.Domain,
+		})
+		log.Println("SOURCE:", dp.Name, dp.Domain)
+	}
+	return sources
 }
 
 // Not MVP feature!

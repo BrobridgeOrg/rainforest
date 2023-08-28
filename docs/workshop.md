@@ -269,7 +269,7 @@ nats request '$RAINFOREST.API.DP.CREATE.*' --server=localhost:4112 \
   "product": {
     "name": "SecondaryOrdersDataProduct",
     "domain": "tachun",
-    "type": "DATA_PRODUCT_TYPE_SOURCE",
+    "type": "DATA_PRODUCT_TYPE_STATE",
     "description": "This is a Source Data Product",
     "source_data_products": [
       {
@@ -286,7 +286,7 @@ nats request '$RAINFOREST.API.DP.CREATE.*' --server=localhost:4112 \
 ``` bash
 nats s ls --server=localhost:4112
 ```
-## 就算源頭掛掉，還是可以讀到資料喔! (TODO: Need Fix)
+## 就算源頭掛掉，還是可以讀到資料喔! 
 先砍到 localhost:4111 的 Rainforest Leaf，然後再讀取看看。
 ``` bash
 nats request '$RAINFOREST.API.KV.*' \
@@ -317,7 +317,7 @@ nats publish '$RAINFOREST.DP.STATE.OrdersState.0' value_0_NEW_VERSION --server=l
 
 檢查新的 Leaf 有沒有成功異步複製 Data Product 的內容。
 ``` bash
-nats subscribe --stream=SOURCE_SecondaryOrdersDataProduct --last --server=localhost:4112
+nats subscribe --stream=STATE_SecondaryOrdersDataProduct --last --server=localhost:4112
 ```
 ## 結論
 Rainforest 大概往以下方向設計

@@ -147,10 +147,19 @@ func (c *KeyValueConsumer) StartKeyValueService() {
 				opts.Reverse = req.GetScan().GetReverse()
 
 				it := txn.NewIterator(opts)
-				defer it.Close()
-				log.Println("Scan Op", []byte(req.GetScan().GetStartKey()), []byte(req.GetScan().GetEndKey()))
-				for it.Seek([]byte(req.GetScan().GetStartKey())); it.ValidForPrefix([]byte(req.GetScan().GetEndKey())); it.Next() {
+				count := 0
 
+				defer it.Close()
+				log.Println(
+					"Scan Op", 
+					[]byte(req.GetScan().GetStartKey()), 
+					[]byte(req.GetScan().GetEndKey()),
+				)
+
+				for it.Seek([]byte(req.GetScan().GetStartKey())); it.ValidForPrefix([]byte(req.GetScan().GetEndKey())); it.Next() {
+					if count >= int(req.GetScan().GetLimit()) {
+						break
+					}
 					item := it.Item()
 					item.Value(func(v []byte) error {
 						kvs = append(kvs, &apiv1.KeyValue{
@@ -159,7 +168,9 @@ func (c *KeyValueConsumer) StartKeyValueService() {
 						})
 						return nil
 					})
+					count++
 				}
+
 				log.Println(kvs)
 				res := &apiv1.KeyValueDataResponse{
 					Kvs: kvs,
