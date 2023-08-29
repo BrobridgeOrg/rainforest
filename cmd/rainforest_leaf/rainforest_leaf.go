@@ -21,6 +21,7 @@ func init() {
 	pflag.Int("leaf-port", 7422, "leaf port to start")
 	pflag.String("stream-path", "./data/stream", "directory to store stream data")
 	pflag.String("kv-path", "", "directory to store key value data")
+	pflag.String("sink-path", "", "directory to sink event data for OLAP to query")
 
 	pflag.Parse()
 
@@ -56,6 +57,10 @@ func main() {
 	// Start KV consumer
 	kv := consumer.NewKeyValueConsumer(nc, cfg.KVPath)
 	go kv.Start()
+
+	// Start Sink consumer
+	sink := consumer.NewSinkCunsumer(nc, cfg.SinkPath)
+	go sink.Start()
 
 	// Wait to stop
 	runtime.Goexit()

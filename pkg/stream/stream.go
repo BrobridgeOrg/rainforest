@@ -19,6 +19,7 @@ type StreamServerConfig struct {
 	LeafPort   int      `mapstructure:"leaf-port"`
 	StreamPath string   `mapstructure:"stream-path"`
 	KVPath     string   `mapstructure:"kv-path"`
+	SinkPath   string   `mapstructure:"sink-path"`
 }
 
 func NewStreamServer(cfg StreamServerConfig) *StreamServer {

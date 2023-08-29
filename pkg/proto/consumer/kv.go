@@ -55,7 +55,7 @@ func (c *KeyValueConsumer) Start() {
 		return
 	}
 	// list stream names
-	go PeriodSched(js, c)
+	go c.PeriodSched(js)
 
 	c.StartKeyValueService()
 
@@ -69,7 +69,7 @@ func (c *KeyValueConsumer) Start() {
 
 }
 
-func PeriodSched(js jetstream.JetStream, c *KeyValueConsumer) {
+func (c *KeyValueConsumer) PeriodSched(js jetstream.JetStream) {
 	deployedConsumer := map[string]bool{}
 	ticker := time.NewTicker(1 * time.Second)
 	for range ticker.C {
@@ -92,14 +92,14 @@ func PeriodSched(js jetstream.JetStream, c *KeyValueConsumer) {
 					log.Printf("Failed to initialize Consumer: %v", err)
 					return
 				}
-				go ConsumerFunc(cons, c.db)
+				go KVConsumerFunc(cons, c.db)
 				deployedConsumer[name] = true
 			}
 		}
 	}
 }
 
-func ConsumerFunc(cons jetstream.Consumer, db *badger.DB) {
+func KVConsumerFunc(cons jetstream.Consumer, db *badger.DB) {
 	for {
 
 		msgs, err := cons.Fetch(1)
@@ -151,8 +151,8 @@ func (c *KeyValueConsumer) StartKeyValueService() {
 
 				defer it.Close()
 				log.Println(
-					"Scan Op", 
-					[]byte(req.GetScan().GetStartKey()), 
+					"Scan Op",
+					[]byte(req.GetScan().GetStartKey()),
 					[]byte(req.GetScan().GetEndKey()),
 				)
 

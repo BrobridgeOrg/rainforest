@@ -1,220 +1,176 @@
 package consumer
 
-// Ref: https://dgraph.io/docs/badger/get-started/
+import (
+	"context"
+	"encoding/json"
+	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
-// type SinkConsumer struct {
-// 	conn          *nats.Conn
-// 	streamManager jetstream.JetStream
-// }
+	"github.com/Awareness-Labs/rainforest/pkg/server"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+)
 
-// func NewSinkCunsumer(nc *nats.Conn, kvPath string) *KeyValueConsumer
+type SinkConsumer struct {
+	conn          *nats.Conn
+	streamManager jetstream.JetStream
+	sinkPath      string
+}
 
-// 	js, err := jetstream.New(nc)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	SinkConsumer struct {
-// 		conn          *nats.Conn
-// 		streamManager jetstream.JetStream
-// 	}
-// 	return &KeyValueConsumer{
-// 		db:            db,
-// 		conn:          nc,
-// 		streamManager: js,
-// 	}
-// }
+type MessageData struct {
+	Data []byte
+	Msg  jetstream.Msg
+}
 
-// // Consume from StateStream, materialize state into key-value database
-// func (c *KeyValueConsumer) Start() {
+func NewSinkCunsumer(nc *nats.Conn, sinkPath string) *SinkConsumer {
 
-// 	js, err := jetstream.New(c.conn)
-// 	if err != nil {
-// 		log.Printf("Failed to initialize JetStream: %v", err)
-// 		return
-// 	}
-// 	// list stream names
-// 	go PeriodSched(js, c)
+	js, err := jetstream.New(nc)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return &SinkConsumer{
+		conn:          nc,
+		streamManager: js,
+		sinkPath:      sinkPath,
+	}
+}
 
-// 	c.StartKeyValueService()
+// Consume from EventStream, sink event into json file (time-slice algo)
+func (c *SinkConsumer) Start() {
 
-// 	// Enable Badger GC
-// 	go badgerGC(c.db)
+	js, err := jetstream.New(c.conn)
+	if err != nil {
+		log.Printf("Failed to initialize JetStream: %v", err)
+		return
+	}
+	// list stream names
+	go c.PeriodSched(js)
 
-// 	if err != nil {
-// 		log.Printf("Failed to initialize Consumer: %v", err)
-// 		return
-// 	}
+	if err != nil {
+		log.Printf("Failed to initialize Consumer: %v", err)
+		return
+	}
+}
 
-// }
+func (c *SinkConsumer) PeriodSched(js jetstream.JetStream) {
+	deployedConsumer := map[string]bool{}
+	ticker := time.NewTicker(1 * time.Second)
+	for range ticker.C {
+		// log.Println("Sched is working bitch!")
+		ctx := context.TODO() // Use the appropriate context
 
-// func PeriodSched(js jetstream.JetStream, c *KeyValueConsumer) {
-// 	deployedConsumer := map[string]bool{}
-// 	ticker := time.NewTicker(1 * time.Second)
-// 	for range ticker.C {
-// 		// log.Println("Sched is working bitch!")
-// 		ctx := context.TODO() // Use the appropriate context
+		names := c.streamManager.StreamNames(ctx)
+		for name := range names.Name() {
 
-// 		names := c.streamManager.StreamNames(ctx)
-// 		for name := range names.Name() {
+			_, ok := deployedConsumer[name]
+			if ok {
+				continue
+			}
 
-// 			_, ok := deployedConsumer[name]
-// 			if ok {
-// 				continue
-// 			}
+			if strings.HasPrefix(name, server.EventDataProductPrefix) {
 
-// 			if strings.HasPrefix(name, server.StateDataProductPrefix) {
+				cons, err := js.OrderedConsumer(ctx, name, jetstream.OrderedConsumerConfig{})
 
-// 				cons, err := js.OrderedConsumer(ctx, name, jetstream.OrderedConsumerConfig{})
+				if err != nil {
+					log.Printf("Failed to initialize Consumer: %v", err)
+					return
+				}
+				go SinkConsumerFunc(cons, c.sinkPath)
+				deployedConsumer[name] = true
+			}
+		}
+	}
+}
 
-// 				if err != nil {
-// 					log.Printf("Failed to initialize Consumer: %v", err)
-// 					return
-// 				}
-// 				go ConsumerFunc(cons, c.db)
-// 				deployedConsumer[name] = true
-// 			}
-// 		}
-// 	}
-// }
+func SinkConsumerFunc(cons jetstream.Consumer, sinkPath string) {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
 
-// func ConsumerFunc(cons jetstream.Consumer, db *badger.DB) {
-// 	for {
+	iter, err := cons.Messages()
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
-// 		msgs, err := cons.Fetch(1)
-// 		if msgs.Error() != nil {
-// 			// handle error
-// 			log.Println(err)
-// 			continue
-// 		}
-// 		for msg := range msgs.Messages() {
-// 			fmt.Printf("Received a JetStream message: %s\n", string(msg.Data()))
+	buffer := make(chan *MessageData, 4096) // Adjusted buffer size to 4096
 
-// 			msg.Headers().Get("")
+	// Goroutine to read messages and send to buffer channel
+	go func() {
+		for {
+			msg, err := iter.Next()
+			if err != nil {
+				log.Println(err)
+				continue
+			}
 
-// 			k := strings.TrimPrefix(msg.Subject(), "$RAINFOREST.DP.STATE.")
-// 			k = strings.Replace(k, ".", "/", -1)
-// 			fmt.Println("k:", []byte(k), "v:", msg.Data())
+			buffer <- &MessageData{Data: msg.Data(), Msg: msg}
+		}
+	}()
 
-// 			// Materilaize
-// 			txn := db.NewTransaction(true)
-// 			txn.Set([]byte(k), msg.Data())
+	for {
+		select {
+		case <-ticker.C:
+			select {
+			case messageData := <-buffer:
+				subject := string(messageData.Msg.Subject())
+				subject = strings.TrimPrefix(subject, "$RAINFOREST.DP.EVENT.")
+				subject = strings.Split(subject, ".")[0] // This will get 'ConversationEvent' from 'ConversationEvent.1'
 
-// 			err := txn.Commit()
-// 			if err != nil {
-// 				log.Println(err)
-// 			}
-// 			msg.Ack()
-// 		}
+				filename := subject + ".json"
+				filePath := filepath.Join(sinkPath, filename)
 
-// 	}
-// }
+				// Ensure directory exists before writing
+				dir := filepath.Dir(filePath)
+				if _, err := os.Stat(dir); os.IsNotExist(err) {
+					os.MkdirAll(dir, 0755)
+				}
 
-// func (c *KeyValueConsumer) StartKeyValueService() {
-// 	c.conn.Subscribe("$RAINFOREST.API.KV.*", func(msg *nats.Msg) {
+				var existingData []json.RawMessage
 
-// 		req := &apiv1.KeyValueRequest{}
-// 		protojson.Unmarshal(msg.Data, req)
-// 		log.Println(req)
-// 		switch req.GetOperation().(type) {
-// 		case *apiv1.KeyValueRequest_Scan:
-// 			err := c.db.View(func(txn *badger.Txn) error {
-// 				log.Println("scan")
-// 				kvs := []*apiv1.KeyValue{}
+				// If file exists, read its contents into the existingData slice
+				if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+					fileBytes, readErr := ioutil.ReadFile(filePath)
+					if readErr != nil {
+						log.Println("Error reading existing file:", readErr)
+						continue
+					}
 
-// 				opts := badger.DefaultIteratorOptions
-// 				opts.Reverse = req.GetScan().GetReverse()
+					if len(fileBytes) > 0 {
+						unmarshalErr := json.Unmarshal(fileBytes, &existingData)
+						if unmarshalErr != nil {
+							log.Println("Error unmarshalling existing JSON data:", unmarshalErr)
+							continue
+						}
+					}
+				}
 
-// 				it := txn.NewIterator(opts)
-// 				defer it.Close()
-// 				log.Println("Scan Op", []byte(req.GetScan().GetStartKey()), []byte(req.GetScan().GetEndKey()))
-// 				for it.Seek([]byte(req.GetScan().GetStartKey())); it.ValidForPrefix([]byte(req.GetScan().GetEndKey())); it.Next() {
+				// Append the new message data to the existing data
+				existingData = append(existingData, json.RawMessage(messageData.Data))
 
-// 					item := it.Item()
-// 					item.Value(func(v []byte) error {
-// 						kvs = append(kvs, &apiv1.KeyValue{
-// 							Key:   string(item.Key()),
-// 							Value: string(v),
-// 						})
-// 						return nil
-// 					})
-// 				}
-// 				log.Println(kvs)
-// 				res := &apiv1.KeyValueDataResponse{
-// 					Kvs: kvs,
-// 				}
-// 				resData, err := protojson.Marshal(res)
-// 				if err != nil {
-// 					sendErrorResponse(msg, err)
-// 					return err
-// 				}
+				// Convert the combined data back to JSON
+				combinedData, marshalErr := json.Marshal(existingData)
+				if marshalErr != nil {
+					log.Println("Error marshaling combined JSON data:", marshalErr)
+					continue
+				}
 
-// 				msg.Respond(resData)
+				// Write combined data back to the file
+				writeErr := ioutil.WriteFile(filePath, combinedData, 0644)
+				if writeErr != nil {
+					log.Println("Error writing to file:", writeErr)
+					continue
+				}
 
-// 				return nil
-// 			})
+				// Acknowledge the message only after it's written to disk
+				messageData.Msg.Ack()
 
-// 			if err != nil {
-// 				sendErrorResponse(msg, err)
-// 				return
-// 			}
-// 		case *apiv1.KeyValueRequest_Get:
-// 			err := c.db.View(func(txn *badger.Txn) error {
-// 				kvs := []*apiv1.KeyValue{}
-// 				item, err := txn.Get([]byte(req.GetScan().StartKey))
-// 				if err != nil {
-// 					sendErrorResponse(msg, err)
-// 					return err
-// 				}
-// 				item.Value(func(v []byte) error {
-// 					kvs = append(kvs, &apiv1.KeyValue{
-// 						Key:   string(item.Key()),
-// 						Value: string(v),
-// 					})
-// 					return nil
-// 				})
-// 				res := &apiv1.KeyValueDataResponse{
-// 					Kvs: kvs,
-// 				}
-// 				resData, err := protojson.Marshal(res)
-// 				if err != nil {
-// 					sendErrorResponse(msg, err)
-// 					return err
-// 				}
-
-// 				msg.Respond(resData)
-// 				return nil
-// 			})
-
-// 			if err != nil {
-// 				sendErrorResponse(msg, err)
-// 				return
-// 			}
-// 		}
-
-// 	})
-// }
-
-// func sendErrorResponse(m *nats.Msg, err error) {
-// 	res := &apiv1.KeyValueResponse{
-// 		Response: &apiv1.KeyValueResponse_ErrorResponse{
-// 			ErrorResponse: &apiv1.ErrorResponse{
-// 				ErrorCode:    "400",
-// 				ErrorMessage: err.Error(),
-// 			},
-// 		},
-// 	}
-// 	resData, _ := json.Marshal(res)
-// 	m.Respond(resData)
-// }
-
-// func badgerGC(db *badger.DB) {
-// 	ticker := time.NewTicker(5 * time.Minute)
-// 	defer ticker.Stop()
-// 	for range ticker.C {
-// 	again:
-// 		err := db.RunValueLogGC(0.7)
-// 		if err == nil {
-// 			goto again
-// 		}
-// 	}
-// }
+			default:
+				// No data in the buffer channel
+			}
+		}
+	}
+}

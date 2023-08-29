@@ -25,7 +25,8 @@ go run cmd/rainforest_leaf/rainforest_leaf.go \
 --domain=tachun \
 --hub-urls=localhost:7422 \
 --kv-path=./data/badger/sts-0 \
---stream-path=./data/stream/sts-0
+--stream-path=./data/stream/sts-0 \
+--sink-path=./data/sink/sts-0
 ```
 
 以下為 flag 的說明
@@ -323,6 +324,6 @@ nats subscribe --stream=STATE_SecondaryOrdersDataProduct --last --server=localho
 Rainforest 大概往以下方向設計
 * Data Product Scale 基本上無限大
 * 基礎設施和應用程式完全封裝成一個自動化的單位
-* Stream Analyze (這基本就是 ksqlDB)
-* State Service  (這基本就是 SQL Database)
+* Stream Analyze (Stream + OLAP)
+* State Service  (Stream + OLTP)
 * 驗證，用 NATS/JetStream 可以直接對 Data Product 做權限管理
