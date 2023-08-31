@@ -44,7 +44,7 @@ func (s *jsonStorage) SinkJSON(filename string, data []byte) error {
 }
 
 func (s *jsonStorage) writeDataInBackground() {
-	ticker := time.NewTicker(25 * time.Millisecond)
+	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
 	var buffer []*fileData

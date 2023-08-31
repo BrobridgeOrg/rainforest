@@ -109,7 +109,7 @@ func (s *Server) CreateDataProduct(m *nats.Msg) {
 		}
 		sendResponse(m, "data product created: "+prod.GetName())
 	case corev1.DataProductType_DATA_PRODUCT_TYPE_EVENT:
-		// if this DP has source
+		createEventDataProduct(ctx, prod, s)
 
 		if err != nil {
 			sendErrorResponse(m, err)

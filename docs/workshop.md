@@ -151,92 +151,74 @@ nats s ls --server=localhost:4111
 ``` bash
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.1' \
 '{
-  "Conversation": {
-    "from": "Tachun",
-    "to": "Fred",
-    "payload": "Hi Fred how are you today",
-    "timestamp": "2023-08-25T08:00:00Z"
-  }
+  "from": "Tachun",
+  "to": "Fred",
+  "payload": "Hi Fred how are you today",
+  "timestamp": "2023-08-25T08:00:00Z"
 }' --server=localhost:4111
 
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.2' \
 '{
-  "Conversation": {
-    "from": "Fred",
-    "to": "Tachun",
-    "payload": "Hello Tachun Im good thanks And you",
-    "timestamp": "2023-08-25T08:01:00Z"
-  }
+  "from": "Fred",
+  "to": "Tachun",
+  "payload": "Hello Tachun Im good thanks And you",
+  "timestamp": "2023-08-25T08:01:00Z"
 }' --server=localhost:4111
 
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.3' \
 '{
-  "Conversation": {
-    "from": "Tachun",
-    "to": "Fred",
-    "payload": "Im doing well thanks for asking",
-    "timestamp": "2023-08-25T08:02:00Z"
-  }
+  "from": "Tachun",
+  "to": "Fred",
+  "payload": "Im doing well thanks for asking",
+  "timestamp": "2023-08-25T08:02:00Z"
 }' --server=localhost:4111
 
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.4' \
 '{
-  "Conversation": {
-    "from": "Fred",
-    "to": "Tachun",
-    "payload": "Great to hear Do you have plans for the weekend",
-    "timestamp": "2023-08-25T08:03:00Z"
-  }
+  "from": "Fred",
+  "to": "Tachun",
+  "payload": "Great to hear Do you have plans for the weekend",
+  "timestamp": "2023-08-25T08:03:00Z"
 }' --server=localhost:4111
 
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.5' \
 '{
-  "Conversation": {
-    "from": "Tachun",
-    "to": "Fred",
-    "payload": "Yes Ill be visiting some friends How about you",
-    "timestamp": "2023-08-25T08:04:00Z"
-  }
+  "from": "Tachun",
+  "to": "Fred",
+  "payload": "Yes Ill be visiting some friends How about you",
+  "timestamp": "2023-08-25T08:04:00Z"
 }' --server=localhost:4111
 
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.6' \
 '{
-  "Conversation": {
-    "from": "Fred",
-    "to": "Tachun",
-    "payload": "I might go hiking if the weather is good",
-    "timestamp": "2023-08-25T08:05:00Z"
-  }
+  "from": "Fred",
+  "to": "Tachun",
+  "payload": "I might go hiking if the weather is good",
+  "timestamp": "2023-08-25T08:05:00Z"
 }' --server=localhost:4111
 
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.7' \
 '{
-  "Conversation": {
-    "from": "Tachun",
-    "to": "Fred",
-    "payload": "That sounds lovely Have a great time",
-    "timestamp": "2023-08-25T08:06:00Z"
-  }
+  "from": "Tachun",
+  "to": "Fred",
+  "payload": "That sounds lovely Have a great time",
+  "timestamp": "2023-08-25T08:06:00Z"
 }' --server=localhost:4111
 
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.8' \
 '{
-  "Conversation": {
-    "from": "Fred",
-    "to": "Tachun",
-    "payload": "Thanks You too Talk later",
-    "timestamp": "2023-08-25T08:07:00Z"
-  }
+  "from": "Fred",
+  "to": "Tachun",
+  "payload": "Thanks You too Talk later",
+  "timestamp": "2023-08-25T08:07:00Z"
 }' --server=localhost:4111
 
 nats publish '$RAINFOREST.DP.EVENT.ConversationEvent.9' \
 '{
-  "Conversation": {
-    "from": "Tachun",
-    "to": "Fred",
-    "payload": "Sure bye for now",
-    "timestamp": "2023-08-25T08:08:00Z"
-  }
+  "from": "Tachun",
+  "to": "Fred",
+  "payload": "Sure bye for now",
+  "timestamp": "2023-08-25T08:08:00Z"
 }' --server=localhost:4111
 ```
 
@@ -246,6 +228,9 @@ nats subscribe --stream=EVENT_ConversationEvent --all --server=localhost:4111
 ```
 
 ## 我還設計了一個 OLAP 可以直接執行 SQL 指令，使用者可以直接 SQL Event Data Product
+``` sql
+SELECT * from './data/sink/sts-0/ConversationEvent.json';
+```
 
 
 ## 啟動第二個 Rainforest Leaf
