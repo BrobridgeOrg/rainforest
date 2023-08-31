@@ -1,14 +1,17 @@
 package main
 
 import (
-	"log"
 	"runtime"
 	"strings"
 
-	"github.com/Awareness-Labs/rainforest/pkg/proto/consumer"
+	"github.com/Awareness-Labs/rainforest/pkg/config"
+	"github.com/Awareness-Labs/rainforest/pkg/consumer"
+	"github.com/Awareness-Labs/rainforest/pkg/processor/kv"
 	"github.com/Awareness-Labs/rainforest/pkg/server"
 	"github.com/Awareness-Labs/rainforest/pkg/stream"
 	"github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -29,15 +32,18 @@ func init() {
 }
 
 func main() {
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
+	log.Info().Msg(">>> Rainforest is the ultra light-weight Data Mesh <<<")
 	// Start embedded Stream Server
-	cfg := stream.StreamServerConfig{}
+	cfg := config.Config{}
 
 	if err := viper.Unmarshal(&cfg); err != nil {
-		log.Fatalf("Unable to decode into struct, %v", err)
+		log.Error().Msg(err.Error())
 	}
 
 	if strings.TrimSpace(cfg.Domain) == "" {
-		log.Fatal("domain is required and cannot be empty")
+		log.Error().Msg("domain cannot be null")
 	}
 
 	// Start NATS, JetStream embedded server
@@ -47,15 +53,18 @@ func main() {
 	// Connect to NATS
 	nc, err := nats.Connect("localhost:" + cfg.Port)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 	}
 
 	// Start Rainforest server
-	rfServer := server.NewServer(nc)
+	rfServer := server.NewServer(nc, cfg)
 	rfServer.Start()
 
 	// Start KV consumer
-	kv := consumer.NewKeyValueConsumer(nc, cfg.KVPath)
+	// kv := consumer.NewKeyValueConsumer(nc, cfg.KVPath)
+	// go kv.Start()
+
+	kv := kv.NewKVProcessor(nc, cfg.KVPath)
 	go kv.Start()
 
 	// Start Sink consumer

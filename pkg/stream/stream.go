@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/Awareness-Labs/rainforest/pkg/config"
 	"github.com/nats-io/nats-server/v2/server"
 )
 
@@ -22,7 +23,7 @@ type StreamServerConfig struct {
 	SinkPath   string   `mapstructure:"sink-path"`
 }
 
-func NewStreamServer(cfg StreamServerConfig) *StreamServer {
+func NewStreamServer(cfg config.Config) *StreamServer {
 	routes := []*url.URL{}
 	for _, hub := range cfg.HubURLs {
 		routes = append(routes, &url.URL{
